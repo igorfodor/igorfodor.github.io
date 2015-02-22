@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Ubuntu | A programmer's log book]]></title>
+  <link href="http://igorfodor.github.io/blog/categories/ubuntu/atom.xml" rel="self"/>
+  <link href="http://igorfodor.github.io/"/>
+  <updated>2015-02-22T09:46:35+01:00</updated>
+  <id>http://igorfodor.github.io/</id>
+  <author>
+    <name><![CDATA[Igor Fodor]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Execute Shell Script on Connecting to Home Network to Sync Data to NAS]]></title>
+    <link href="http://igorfodor.github.io/blog/2014/11/14/execute-shell-script-on-connecting-to-home-network-to-sync-data-to-nas/"/>
+    <updated>2014-11-14T09:25:33+01:00</updated>
+    <id>http://igorfodor.github.io/blog/2014/11/14/execute-shell-script-on-connecting-to-home-network-to-sync-data-to-nas</id>
+    <content type="html"><![CDATA[<h1>Idea</h1>
+
+<p>I was looking for a way to synchronize my notebook data to the NAS each time i connect to the home network.
+The network manager in ubuntu offers a way to execute scripts that are located in /etc/NetworkManager/dispatcher.d/.
+The script receives two arguments, the first being the interface name of the device just activated, and second an action.
+You can find more detail info about NetworkManager here: <a href="http://manpages.ubuntu.com/manpages/utopic/man8/NetworkManager.8.html">http://manpages.ubuntu.com/manpages/utopic/man8/NetworkManager.8.html</a> .</p>
+
+<p>Thinking about the implementation of the script i want it to perform the following tasks:</p>
+
+<ol>
+<li>Determine SSID and verify if it matches my home network</li>
+<li>Mount the shared folder from NAS</li>
+<li>Sync home folder to a mounted NAS folder with rsync.</li>
+<li>Write the progress of the synchronization into a log file.</li>
+</ol>
+
+
+<h1>Scripts</h1>
+
+<p>As i played with the initial implementation i found out that it is necessary to separate the rsync command from the NetworkManagers dispatcher script. Thats because the rsync can actualy take long time to finish the job and the NetworkManager has a timeout of 3 seconds that applies to each dispatcher script it runs. If the script exceeds the 3 seconds, the NetworkManager tries to kill the script.</p>
+
+<p>Here is the dispachter script</p>
+
+<pre><code class="bash wlanIsOnHomeNetwork : look for the home network and execute sync script ">
+#!/bin/bash
+
+INTERFACE=$1
+STATUS=$2
+
+DESIRED_INTERFACE="wlan0"
+HOME_NETWORK="WeCanDoIt"
+SYNC_SCRIPT="/home/teknik/.scripts/syncHomeFolderToNas.sh"
+
+if [ "$INTERFACE" = "$DESIRED_INTERFACE" ]; then
+    #  get the iwconfig info for the interface and extract the ssid name 
+    CURRENT_NETWORK="$(iwconfig $DESIRED_INTERFACE | grep -o 'SSID:".*"' | sed 's/.*"\(.*\)"/\1/' | tr -d ' ')"
+    if [ "$HOME_NETWORK" = "$CURRENT_NETWORK" ]; then
+        case "$STATUS" in
+            up)
+                logger -s "## Home network up event detected. Triggering sync script ..."
+                nohup $SYNC_SCRIPT &amp;
+            ;;
+            down)
+                # nothing to execute
+            ;;
+            pre-up)
+                # nothing to execute
+            ;;
+            post-down)
+                # nothing to execute
+            ;;
+            *)
+            ;;
+        esac
+    fi
+fi
+
+exit 0
+</code></pre>
+
+<p>Notice line 17 where the dispatcher script executes the sync script as a background process.</p>
+
+<p>Following values need to be set:
+<figure class='code'><figcaption><span>wlanIsOnHomeNetwork : variables</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">DESIRED_INTERFACE</span><span class="o">=</span><span class="p">&amp;</span>ldquo<span class="p">;</span>wlan0<span class="p">&amp;</span>rdquo<span class="p">;</span>                                       <span class="c"># the wifi interface</span>
+</span><span class='line'><span class="nv">HOME_NETWORK</span><span class="o">=</span><span class="p">&amp;</span>ldquo<span class="p">;</span>WeCanDoIt<span class="p">&amp;</span>rdquo<span class="p">;</span>                                        <span class="c"># the name of the home network</span>
+</span><span class='line'><span class="nv">SYNC_SCRIPT</span><span class="o">=</span><span class="p">&amp;</span>ldquo<span class="p">;</span>/home/teknik/.scripts/syncHomeFolderToNas.sh<span class="p">&amp;</span>rdquo<span class="p">;</span>      <span class="c"># script that does the syncing&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'>&lt;pre&gt;&lt;code&gt;And here is the second part, the script that takes care of the synchronization of my home directory.
+</span><span class='line'>&lt;/code&gt;&lt;/pre&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;!/bin/bash&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;SOURCE_DIRECTORY<span class="o">=</span>/home/teknik/
+</span><span class='line'><span class="nv">TARGET_MOUNT_POINT</span><span class="o">=</span>/mnt/exile&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;TARGET_DIRECTORY<span class="o">=</span><span class="nv">$TARGET_MOUNT_POINT</span>/4-notebook/
+</span><span class='line'><span class="nv">EXCLUDE_FOLDERS_FILE</span><span class="o">=</span>/home/teknik/.rsync/.excludeFolders.txt
+</span><span class='line'><span class="nv">LOG_FOLDER</span><span class="o">=</span>/home/teknik/.rsync
+</span><span class='line'><span class="nv">LOG_FILE_PREFIX</span><span class="o">=</span>syncLog&lt;em&gt;<span class="k">$(</span>date +<span class="p">&amp;</span>ldquo<span class="p">;</span>%d-%m-%y&lt;/em&gt;%H:%M:%S<span class="p">&amp;</span>rdquo<span class="p">;</span><span class="k">)</span>
+</span><span class='line'><span class="nv">LOG_FILE</span><span class="o">=</span><span class="nv">$LOG_FOLDER</span>/<span class="nv">$LOG_FILE_PREFIX</span>.log&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;logger -s <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="c">## starting sync job!&amp;rdquo;</span>
+</span><span class='line'>logger -s <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="c">## mount NAS shares to local FS!&amp;rdquo;</span>
+</span><span class='line'>mount -a&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;check <span class="k">if</span> mount point ready&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;if grep -qs <span class="nv">$TARGET_MOUNT_POINT</span> /proc/mounts <span class="p">;</span> <span class="k">then</span>
+</span><span class='line'>    logger -s <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="c">## syncing files!&amp;rdquo;</span>
+</span><span class='line'>    <span class="c"># sync and write output to log file</span>
+</span><span class='line'>    rsync -rlptDzv <span class="p">&amp;</span>ndash<span class="p">;</span>no-o <span class="p">&amp;</span>ndash<span class="p">;</span>no-g <span class="p">&amp;</span>ndash<span class="p">;</span>progress <span class="p">&amp;</span>ndash<span class="p">;</span>delete <span class="p">&amp;</span>ndash<span class="p">;</span>log-file<span class="o">=</span><span class="nv">$LOG_FILE</span> <span class="p">&amp;</span>ndash<span class="p">;</span><span class="nv">exclude</span><span class="o">=</span><span class="nv">$LOG_FILE</span> <span class="p">&amp;</span>ndash<span class="p">;</span>exclude-from<span class="o">=</span><span class="nv">$EXCLUDE_FOLDERS_FILE</span> <span class="nv">$SOURCE_DIRECTORY</span> <span class="nv">$TARGET_DIRECTORY</span>
+</span><span class='line'>    logger -s <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="c">## successfully synced data!&amp;rdquo;</span>
+</span><span class='line'>    <span class="c"># zenity &amp;ndash;info &amp;ndash;text &amp;lsquo;Successfully synced data!&amp;rsquo;</span>
+</span><span class='line'><span class="k">else</span>
+</span><span class='line'>    logger -s <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="c">## mount point $TARGET_MOUNT_POINT not ready !&amp;rdquo;</span>
+</span><span class='line'><span class="k">fi</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;pre&gt;&lt;code&gt;In line <span class="m">19</span> you can see the rsync <span class="nb">command </span>with its options. Each sync attempt is storred in a log file. The list of excluded directories and files is stored in a file <span class="o">(</span>line 7<span class="o">)</span>. In line <span class="m">21</span> i tried to create a dialog window  that informs me after the syncing was succesffully completed. But unfortunately since the job runs as root i was not able to display the window under the actual user context.
+</span><span class='line'>&lt;/code&gt;&lt;/pre&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;SOURCE_DIRECTORY<span class="o">=</span>/home/teknik/                                  <span class="c"># the source directory that needs to be backed up</span>
+</span><span class='line'><span class="nv">TARGET_DIRECTORY</span><span class="o">=</span>/mnt/exile/4-notebook/                         <span class="c"># the target directory where the backup is copied</span>
+</span><span class='line'><span class="nv">EXCLUDE_FOLDERS_FILE</span><span class="o">=</span>/home/teknik/.rsync/excludeFolders.txt     <span class="c">#list of folders that will be ignored during backup</span>
+</span><span class='line'><span class="nv">LOG_FOLDER</span><span class="o">=</span>/home/teknik/.rsync                                  <span class="c"># folder for log files</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<h1>Location &amp; Permissions</h1>
+
+<p>Now all we need to do is to put the dispatcher script into the directory /etc/NetworkManager/dispatcher.d/, change ownership to root and make it executable. I called it wlanIsOnHomeNetwork.</p>
+
+<pre><code class="console wlanIsOnHomeNetwork : Change permissions and make executable ">sudo chown root:root /etc/NetworkManager/dispatcher.d/wlanIsOnHomeNetwork
+sudo chmod +x /etc/NetworkManager/dispatcher.d/wlanIsOnHomeNetwork
+</code></pre>
+
+<h1>Links</h1>
+
+<p><a href="http://www.techytalk.info/start-script-on-network-manager-successful-connection/">http://www.techytalk.info/start-script-on-network-manager-successful-connection/</a>
+<a href="https://wiki.ubuntu.com/OnNetworkConnectionRunScript">https://wiki.ubuntu.com/OnNetworkConnectionRunScript</a></p>
+]]></content>
+  </entry>
+  
+</feed>
