@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[A programmer's log book]]></title>
+  <title><![CDATA[A developers log book]]></title>
   <link href="http://igorfodor.github.io/atom.xml" rel="self"/>
   <link href="http://igorfodor.github.io/"/>
-  <updated>2015-02-22T10:22:46+01:00</updated>
+  <updated>2015-02-22T10:36:18+01:00</updated>
   <id>http://igorfodor.github.io/</id>
   <author>
     <name><![CDATA[Igor Fodor]]></name>
